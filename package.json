@@ -1,0 +1,12 @@
+{
+  "name": "foundry",
+  "version": "0.1.0",
+  "description": "Autonomous AI holding company — agents that found, validate, build, and operate portfolio companies",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}

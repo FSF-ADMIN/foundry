@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Foundry — Autonomous Holding Company</title>
+<style>
+:root{--bg:#08090b;--panel:#0e0f12;--line:#1f2126;--txt:#f7f8f8;--dim:#8a8f98;--acc:#7c8aeb;--acc2:#7c8aeb;--warn:#d5a044;--bad:#e5645e;--orange:#c98a4b}
+*{margin:0;box-sizing:border-box}
+body{font-family:-apple-system,'Segoe UI',sans-serif;background:var(--bg);color:var(--txt);min-height:100vh;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1340px;margin:0 auto;padding:0 24px 60px}
+header{display:flex;align-items:center;justify-content:space-between;padding:20px 0;border-bottom:1px solid var(--line);flex-wrap:wrap;gap:12px}
+.logo{font-weight:700;font-size:19px;letter-spacing:-.02em}
+.logo span{color:var(--txt)}
+.logo small{display:block;font-weight:400;font-size:12px;color:var(--dim);letter-spacing:.4px}
+.mode{font-size:11px;letter-spacing:2px;text-transform:uppercase;padding:5px 12px;border-radius:99px;border:1px solid var(--line)}
+.mode.mock{color:var(--warn);border-color:var(--warn)}
+.mode.live{color:var(--acc);border-color:var(--acc)}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:22px 0}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+.stat .n{font-size:24px;font-weight:800}
+.stat .l{font-size:11px;color:var(--dim);letter-spacing:.6px;text-transform:uppercase;margin-top:2px}
+.controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:22px}
+input[type=text],select{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:11px 14px;color:var(--txt);font-size:14px}
+input[type=text]:focus,select:focus{outline:none;border-color:var(--acc)}
+#idea{flex:1;min-width:220px}
+select{max-width:280px}
+button{background:#f7f8f8;border:none;color:#0b0c0e;font-weight:600;padding:11px 18px;border-radius:8px;cursor:pointer;font-size:14px}
+button:hover{opacity:.9}
+button.ghost{background:var(--panel);color:var(--txt);border:1px solid var(--line)}
+button.ghost.on{border-color:var(--acc);color:var(--acc)}
+.grid{display:grid;grid-template-columns:1fr 400px;gap:20px;align-items:start}
+@media(max-width:980px){.grid{grid-template-columns:1fr}}
+h2{font-size:13px;letter-spacing:1.5px;text-transform:uppercase;color:var(--dim);margin:0 0 12px}
+.co{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px;margin-bottom:16px}
+.co .top{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap}
+.co h3{font-size:18px;letter-spacing:-.3px}
+.co .tag{color:var(--dim);font-size:13px;margin-top:3px}
+.rfs-badge{display:inline-block;font-size:11px;color:var(--orange);border:1px solid var(--orange);border-radius:99px;padding:3px 10px;margin-top:8px;opacity:.9}
+.pill{font-size:11px;letter-spacing:1px;text-transform:uppercase;padding:4px 10px;border-radius:99px;border:1px solid var(--line);color:var(--dim);white-space:nowrap}
+.pill.operate{color:var(--acc);border-color:var(--acc)}
+.pill.passed{color:var(--bad);border-color:var(--bad)}
+.stages{display:flex;gap:5px;margin:13px 0 10px}
+.stg{flex:1;height:5px;border-radius:99px;background:var(--line)}
+.stg.done{background:var(--acc)}
+.meta{display:flex;gap:16px;flex-wrap:wrap;font-size:13px;color:var(--dim);margin-top:6px}
+.meta b{color:var(--txt)}
+.meta a{color:var(--acc);text-decoration:none;font-weight:600}
+.sec{margin-top:12px;border-top:1px solid var(--line);padding-top:10px}
+.sec .h{font-size:10.5px;letter-spacing:1.2px;text-transform:uppercase;color:var(--dim);margin-bottom:7px}
+.org{font-size:12.5px;line-height:1.45}
+.org .lvl1{margin-left:16px}.org .lvl2{margin-left:34px}
+.org .nm{color:var(--dim);font-weight:400}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font-size:11.5px;padding:4px 10px;border-radius:99px;border:1px solid var(--line);color:var(--dim);cursor:pointer;background:none}
+.chip.connected{color:var(--acc);border-color:var(--acc)}
+.chip.needed{color:var(--warn);border-color:var(--warn)}
+.ops{font-size:12.5px;color:var(--dim);max-height:104px;overflow:auto}
+.ops div{margin-bottom:4px}
+.side{position:sticky;top:16px;display:flex;flex-direction:column;gap:18px}
+.feed{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;max-height:30vh;overflow:auto}
+.task{display:flex;gap:8px;padding:7px 0;border-bottom:1px solid var(--line);font-size:12.5px;align-items:baseline}
+.task:last-child{border-bottom:none}
+.task .who{white-space:nowrap;color:var(--dim)}
+.task .st{margin-left:auto;font-size:10.5px;letter-spacing:1px;text-transform:uppercase;white-space:nowrap}
+.st.pending{color:var(--dim)}.st.running{color:var(--warn)}.st.done{color:var(--acc)}.st.failed{color:var(--bad)}
+.chat{background:var(--panel);border:1px solid var(--line);border-radius:14px;display:flex;flex-direction:column;max-height:52vh}
+.chat .head{padding:12px 16px;border-bottom:1px solid var(--line);display:flex;gap:10px;align-items:center}
+.chat .head select{flex:1;max-width:none;padding:8px 10px;font-size:13px}
+.msgs{flex:1;overflow:auto;padding:14px 16px;display:flex;flex-direction:column-reverse;gap:10px;min-height:180px}
+.msg{max-width:88%;font-size:13px;line-height:1.45;padding:9px 12px;border-radius:12px}
+.msg .from{font-size:10.5px;letter-spacing:.6px;text-transform:uppercase;color:var(--dim);margin-bottom:3px}
+.msg.agent{background:#131926;border:1px solid var(--line);align-self:flex-start;border-bottom-left-radius:4px}
+.msg.agent.question{border-color:var(--warn)}
+.msg.agent.question .from{color:var(--warn)}
+.msg.user{background:#181a20;border:1px solid #2a2d35;align-self:flex-end;border-bottom-right-radius:4px}
+.chat .input{display:flex;gap:8px;padding:12px;border-top:1px solid var(--line)}
+.chat .input input{flex:1}
+.empty{color:var(--dim);font-size:13.5px;padding:26px;text-align:center;border:1px dashed var(--line);border-radius:14px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="logo"><span>FOUNDRY</span><small>the company that builds companies · thesis: YC Requests for Startups</small></div>
+    <div id="mode" class="mode mock">…</div>
+  </header>
+
+  <div class="stats">
+    <div class="stat"><div class="n" id="s-founded">0</div><div class="l">Founded</div></div>
+    <div class="stat"><div class="n" id="s-operating">0</div><div class="l">Operating</div></div>
+    <div class="stat"><div class="n" id="s-agents">0</div><div class="l">AI employees</div></div>
+    <div class="stat"><div class="n" id="s-tasks">0</div><div class="l">Tasks done</div></div>
+    <div class="stat"><div class="n" id="s-questions">0</div><div class="l">Open questions</div></div>
+  </div>
+
+  <div class="controls">
+    <select id="rfsPick"><option value="">Pick a YC RFS (or let the idea map to one)…</option></select>
+    <input id="idea" type="text" placeholder="Optional idea — leave blank to auto-concept from the chosen RFS">
+    <button onclick="spawn()">Found company</button>
+    <button class="ghost" id="tickBtn" onclick="tickNow()">Run tick</button>
+    <button class="ghost" id="apBtn" onclick="toggleAP()">Autopilot: off</button>
+  </div>
+
+  <div class="grid">
+    <div>
+      <h2>Portfolio</h2>
+      <div id="portfolio"><div class="empty">No companies yet. Pick an RFS above and hit Found company — the CEO agent takes it from there.</div></div>
+    </div>
+    <div class="side">
+      <div>
+        <h2>Chat — the org talks to you</h2>
+        <div class="chat">
+          <div class="head">💬 <select id="chatCo"><option value="">Select a company…</option></select></div>
+          <div class="msgs" id="msgs"><div class="empty" style="border:none">Agent questions and updates land here. Answer them — your replies steer the company.</div></div>
+          <div class="input"><input id="chatText" type="text" placeholder="Reply to the team…"><button onclick="sendChat()">Send</button></div>
+        </div>
+      </div>
+      <div>
+        <h2>Agent activity</h2>
+        <div class="feed" id="feed"><div class="empty" style="border:none">Quiet in the office.</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const STAGES=['ideation','validation','team','build','operate'];
+let S=null;
+
+async function refresh(){
+  const r=await fetch('/api/state');S=await r.json();render();
+}
+function countAgents(node){if(!node)return 0;return 1+(node.reports||[]).reduce((a,r)=>a+countAgents(r),0);}
+
+function render(){
+  const m=document.getElementById('mode');
+  m.textContent=S.mode==='mock'?'Mock mode':'Live · '+S.model;
+  m.className='mode '+S.mode;
+  document.getElementById('s-founded').textContent=S.stats.companiesFounded;
+  document.getElementById('s-operating').textContent=S.companies.filter(c=>c.stage==='operate'&&c.status==='active').length;
+  document.getElementById('s-tasks').textContent=S.stats.tasksCompleted;
+  document.getElementById('s-agents').textContent=S.companies.filter(c=>c.status==='active').reduce((a,c)=>a+countAgents(c.org),0);
+  document.getElementById('s-questions').textContent=S.messages.filter(x=>x.kind==='question').length;
+  const ap=document.getElementById('apBtn');
+  ap.textContent='Autopilot: '+(S.autopilot?'on':'off');
+  ap.className='ghost'+(S.autopilot?' on':'');
+
+  // RFS picker (fill once)
+  const rp=document.getElementById('rfsPick');
+  if(rp.options.length<=1){for(const r of S.rfs){const o=document.createElement('option');o.value=r.id;o.textContent=r.title+' — '+r.author;rp.appendChild(o);}}
+
+  // Chat company selector (preserve selection)
+  const cc=document.getElementById('chatCo');
+  const cur=cc.value;
+  cc.innerHTML='<option value=\"\">Select a company…</option>'+S.companies.map(c=>`<option value="${c.id}">${esc(c.name||c.idea.slice(0,40))}</option>`).join('');
+  if([...cc.options].some(o=>o.value===cur))cc.value=cur;
+  else if(S.companies.length&&!cur)cc.value=S.companies[0].id;
+
+  const p=document.getElementById('portfolio');
+  p.innerHTML=S.companies.length?S.companies.map(coCard).join(''):'<div class="empty">No companies yet. Pick an RFS above and hit Found company — the CEO agent takes it from there.</div>';
+
+  const f=document.getElementById('feed');
+  f.innerHTML=S.tasks.length?S.tasks.map(t=>{
+    const co=S.companies.find(c=>c.id===t.companyId);
+    return `<div class="task"><span class="who">${co&&co.name?esc(co.name):'—'}</span><span>${esc(t.label)}</span><span class="st ${t.status}">${t.status}</span></div>`;
+  }).join(''):'<div class="empty" style="border:none">Quiet in the office.</div>';
+
+  renderChat();
+}
+
+function renderChat(){
+  const coId=document.getElementById('chatCo').value;
+  const box=document.getElementById('msgs');
+  const msgs=S.messages.filter(x=>!coId||x.companyId===coId);
+  if(!msgs.length){box.innerHTML='<div class="empty" style="border:none">Agent questions and updates land here. Answer them — your replies steer the company.</div>';return;}
+  box.innerHTML=msgs.map(x=>{
+    if(x.from==='user')return `<div class="msg user"><div class="from">You</div>${esc(x.text)}</div>`;
+    return `<div class="msg agent ${x.kind}"><div class="from">${x.agentEmoji||'🤖'} ${esc(x.agentTitle||'Agent')}${x.kind==='question'?' · needs you':''}</div>${esc(x.text)}</div>`;
+  }).join('');
+}
+
+function orgHtml(node,lvl){
+  if(!node)return'';
+  let h=`<div class="lvl${lvl||0}">${node.emoji} <b>${esc(node.title)}</b>${node.name?` <span class="nm">· ${esc(node.name)}</span>`:''}</div>`;
+  for(const r of node.reports||[])h+=orgHtml(r,(lvl||0)+1);
+  return h;
+}
+
+function coCard(c){
+  const si=STAGES.indexOf(c.stage);
+  const bars=STAGES.map((s,i)=>`<div class="stg ${i<si||(i===si&&c.stage==='operate')?'done':''}" title="${s}"></div>`).join('');
+  const pill=c.status==='passed'?'<span class="pill passed">passed on</span>':c.status==='paused'?'<span class="pill" style="color:var(--warn);border-color:var(--warn)">paused</span>':`<span class="pill ${c.stage}">${c.stage}</span>`;
+  const rfsO=S.rfs.find(r=>r.id===c.rfsId);
+  const rfsB=rfsO?`<div class="rfs-badge">YC RFS · ${esc(rfsO.title)}</div>`:'';
+  const score=c.validation?`<span>Analyst score <b>${c.validation.score}</b></span>`:'';
+  const site=c.siteUrl?`<a href="${c.siteUrl}" target="_blank">Visit live site ↗</a>`:'';
+  const org=c.org&&(c.org.reports||[]).length?`<div class="sec"><div class="h">Org · ${countAgents(c.org)} agents</div><div class="org">${orgHtml(c.org,0)}</div></div>`:'';
+  const ints=c.integrations&&c.integrations.length?`<div class="sec"><div class="h">Integrations needed (click when connected)</div><div class="chips">${c.integrations.map(i=>`<button class="chip ${i.status}" title="${esc(i.purpose)} — requested by ${esc(i.requestedBy)}" onclick="toggleInt('${c.id}','${esc(i.name)}','${i.status}')">${i.status==='connected'?'✓ ':''}${esc(i.name)}</button>`).join('')}</div></div>`:'';
+  const ops=c.opsLog&&c.opsLog.length?`<div class="sec"><div class="h">Ops log</div><div class="ops">${c.opsLog.slice(0,5).map(o=>`<div>▸ <b style="color:var(--txt)">${o.type}</b> <span style="opacity:.7">(${esc(o.by||'')})</span> — ${esc(short(o.result))}</div>`).join('')}</div></div>`:'';
+  const manage=`<a href="/company/${c.id}">Manage business ↗</a>`;
+  return `<div class="co"><div class="top"><div><h3><a href="/company/${c.id}" style="color:inherit;text-decoration:none">${esc(c.name||'…incorporating')}</a></h3><div class="tag">${esc(c.brief?c.brief.tagline||'':c.idea)}</div>${rfsB}</div>${pill}</div><div class="stages">${bars}</div><div class="meta">${score}${c.brief&&c.brief.pricing?`<span>Pricing <b>${esc(c.brief.pricing)}</b></span>`:''}${manage}${site}</div>${org}${ints}${ops}</div>`;
+}
+function short(r){if(!r)return'';const v=r.experiment||r.deliverable||r.shipping||(r.mrr&&('MRR '+r.mrr))||r.status||r.firstTask||r.hook||JSON.stringify(r);return String(v).slice(0,90);}
+function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+
+async function spawn(){
+  const idea=document.getElementById('idea').value.trim();
+  const rfsId=document.getElementById('rfsPick').value||null;
+  if(!idea&&!rfsId)return alert('Pick an RFS or type an idea.');
+  document.getElementById('idea').value='';
+  await fetch('/api/companies',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({idea,rfsId})});
+  await tickNow();
+}
+async function tickNow(){await fetch('/api/tick',{method:'POST'});await refresh();}
+async function toggleAP(){
+  await fetch('/api/autopilot',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({on:!S.autopilot})});
+  await refresh();
+}
+async function sendChat(){
+  const coId=document.getElementById('chatCo').value;
+  const el=document.getElementById('chatText');
+  const text=el.value.trim();
+  if(!coId)return alert('Select a company to talk to.');
+  if(!text)return;
+  el.value='';
+  await fetch('/api/chat',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({companyId:coId,text})});
+  await tickNow();
+}
+async function toggleInt(companyId,name,status){
+  await fetch('/api/integrations',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({companyId,name,status:status==='connected'?'needed':'connected'})});
+  await refresh();
+}
+document.getElementById('idea').addEventListener('keydown',e=>{if(e.key==='Enter')spawn();});
+document.getElementById('chatText').addEventListener('keydown',e=>{if(e.key==='Enter')sendChat();});
+document.getElementById('chatCo').addEventListener('change',renderChat);
+refresh();setInterval(refresh,2500);
+</script>
+</body>
+</html>
