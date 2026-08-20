@@ -4,6 +4,7 @@
 
 const rfs = require('./rfs');
 const { buildSiteHtml } = require('./site-builder');
+const { buildProductHtml } = require('./product-builder');
 
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 const SUFFIXES = ['Labs', 'HQ', 'Pilot', 'Loop', 'Desk', 'Forge', 'Works'];
@@ -130,6 +131,10 @@ function respond(taskType, company, task = {}) {
     case 'build-site':
     case 'site-update':
       return buildSiteHtml(company);
+
+    case 'build-product':
+    case 'product-update':
+      return buildProductHtml(company);
 
     case 'launch-plan':
       return JSON.stringify({

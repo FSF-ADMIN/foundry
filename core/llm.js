@@ -1,15 +1,32 @@
 // Agent brain. One function — complete() — that either calls the Claude API
-// (live mode) or routes to the mock responder (offline mode). Everything above
-// this layer is identical in both modes, so the demo→live flip is just an env var.
+// (live mode) or delegates to Jupiter, the AI-employee platform that executes
+// Foundry's tasks (with the local mock as offline fallback). Everything above
+// this layer is identical in every mode, so the demo→live flip is just an env var.
 
 const config = require('../config');
 const mock = require('./mock');
+const jupiter = require('./jupiter');
 
-async function complete({ system, prompt, taskType, company, task, maxTokens }) {
+async function complete({ system, prompt, taskType, company, task, agent, maxTokens }) {
   if (config.MOCK_MODE) {
     // Simulate a little latency so the dashboard feels alive
     await new Promise((r) => setTimeout(r, 250 + Math.random() * 600));
-    return mock.respond(taskType, company, task);
+    const fallback = mock.respond(taskType, company, task);
+    // Jupiter runs the task as one of its AI employees (audit trail + usage
+    // tracking there; real model output when Jupiter's platform key is set).
+    if (agent) {
+      const viaJupiter = await jupiter.execute({
+        system,
+        prompt,
+        maxTokens: maxTokens || config.MAX_TOKENS,
+        task,
+        company,
+        agent,
+        fallback,
+      });
+      if (viaJupiter !== null) return viaJupiter;
+    }
+    return fallback;
   }
 
   const res = await fetch('https://api.anthropic.com/v1/messages', {

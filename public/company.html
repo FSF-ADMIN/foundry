@@ -5,9 +5,9 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Company — Foundry</title>
 <style>
-:root{--bg:#08090b;--panel:#0e0f12;--line:#1f2126;--txt:#f7f8f8;--dim:#8a8f98;--acc:#7c8aeb;--acc2:#7c8aeb;--warn:#d5a044;--bad:#e5645e;--orange:#c98a4b}
+:root{--bg:#0a0e14;--panel:#0f141d;--line:#1c2432;--txt:#eef2f7;--dim:#8b95a7;--acc:#4d9fff;--acc2:#4d9fff;--warn:#d5a044;--bad:#e5645e;--orange:#c98a4b}
 *{margin:0;box-sizing:border-box}
-body{font-family:-apple-system,'Segoe UI',sans-serif;background:var(--bg);color:var(--txt);min-height:100vh;-webkit-font-smoothing:antialiased}
+body{font-family:Inter,-apple-system,'Segoe UI',sans-serif;background:var(--bg);color:var(--txt);min-height:100vh;-webkit-font-smoothing:antialiased}
 .wrap{max-width:1240px;margin:0 auto;padding:0 24px 60px}
 header{display:flex;align-items:flex-start;justify-content:space-between;padding:20px 0;border-bottom:1px solid var(--line);flex-wrap:wrap;gap:14px}
 .back{color:var(--dim);text-decoration:none;font-size:13px}
@@ -20,7 +20,14 @@ h1{font-size:26px;letter-spacing:-.6px;margin-top:6px}
 .pill.operate{color:var(--acc);border-color:var(--acc)}
 .pill.paused{color:var(--warn);border-color:var(--warn)}
 .pill.passed{color:var(--bad);border-color:var(--bad)}
-button{background:#f7f8f8;border:none;color:#0b0c0e;font-weight:600;padding:10px 16px;border-radius:8px;cursor:pointer;font-size:13.5px}
+.powered{display:flex;align-items:center;gap:8px;padding:6px 13px;border:1px solid var(--line);border-radius:99px;background:var(--panel);text-decoration:none}
+.powered:hover{border-color:#3a3e48}
+.powered .pb-label{font-size:10px;letter-spacing:1.4px;text-transform:uppercase;color:var(--dim)}
+.powered img.pb-mark{height:17px;width:auto;display:block}
+.powered img.pb-word{height:11px;width:auto;display:block;opacity:.95}
+.powered .pb-dot{width:7px;height:7px;border-radius:99px;background:var(--dim);opacity:.5}
+.powered.connected .pb-dot{background:#58c48a;opacity:1;box-shadow:0 0 6px rgba(88,196,138,.55)}
+button{background:var(--acc);border:none;color:#fff;font-weight:600;padding:10px 16px;border-radius:8px;cursor:pointer;font-size:13.5px}
 button:hover{opacity:.9}
 button.ghost{background:var(--panel);color:var(--txt);border:1px solid var(--line)}
 button.ghost.warn{color:var(--warn);border-color:var(--warn)}
@@ -81,7 +88,14 @@ pre{white-space:pre-wrap;font-family:inherit;font-size:13px;color:var(--dim);lin
       <div id="rfs"></div>
     </div>
     <div class="headctl">
+      <a id="jupiterBadge" class="powered" href="http://localhost:3000" target="_blank" title="Jupiter — the AI-employee platform executing Foundry's tasks">
+        <span class="pb-label">Powered by</span>
+        <img class="pb-mark" src="/brand/mark.png" alt="">
+        <img class="pb-word" src="/brand/wordmark.png" alt="Jupiter">
+        <span class="pb-dot"></span>
+      </a>
       <span class="pill" id="stagePill">…</span>
+      <a class="btnlink" id="productLink" style="display:none" target="_blank">Open product ↗</a>
       <a class="btnlink" id="siteLink" style="display:none" target="_blank">Visit live site ↗</a>
       <button class="ghost mini" onclick="tickNow()">Run tick</button>
       <button class="ghost mini" id="pauseBtn" onclick="togglePause()">Pause ops</button>
@@ -97,6 +111,7 @@ pre{white-space:pre-wrap;font-family:inherit;font-size:13px;color:var(--dim);lin
       <div class="panel"><h2>Org chart — request work directly</h2><div class="org" id="org"><div class="empty">CEO is assembling the team.</div></div></div>
       <div class="panel"><h2>Investment memo</h2><div id="memo"><div class="empty">Awaiting analyst.</div></div></div>
       <div class="panel"><h2>Launch plan</h2><div id="launch"><div class="empty">Awaiting CMO.</div></div></div>
+      <div class="panel"><h2>Product changelog</h2><div class="list" id="productLog"><div class="empty">The product engineer hasn't shipped yet.</div></div></div>
       <div class="panel"><h2>Task history</h2><div class="list" id="tasks"><div class="empty">No tasks yet.</div></div></div>
     </div>
     <div class="side">
@@ -119,7 +134,7 @@ pre{white-space:pre-wrap;font-family:inherit;font-size:13px;color:var(--dim);lin
 const STAGES=['ideation','validation','team','build','operate'];
 const coId=location.pathname.split('/').filter(Boolean)[1];
 let D=null;
-let seenDev=false;
+let devCount=0;
 
 async function refresh(){
   const r=await fetch('/api/companies/'+coId);
@@ -131,6 +146,14 @@ function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&l
 function render(){
   const c=D.company;
   document.title=(c.name||'Company')+' — Foundry';
+  const jb=document.getElementById('jupiterBadge');
+  if(D.jupiter){
+    if(D.jupiter.url)jb.href=D.jupiter.url;
+    jb.className='powered'+(D.jupiter.connected?' connected':'');
+    jb.title=D.jupiter.connected
+      ?`Jupiter executes Foundry's tasks · ${D.jupiter.mode==='live'?'live model':'simulation'} · ${D.jupiter.tasksDelegated} delegated`
+      :'Jupiter '+(D.jupiter.enabled?'not reached yet — tasks fall back to the built-in simulator':'disabled');
+  }
   document.getElementById('name').textContent=c.name||'…incorporating';
   document.getElementById('tagline').textContent=c.brief?(c.brief.oneLiner||c.brief.tagline||''):c.idea;
   const r=D.rfs.find(x=>x.id===c.rfsId);
@@ -140,6 +163,8 @@ function render(){
   pill.className='pill '+(c.status!=='active'?c.status:c.stage);
   const site=document.getElementById('siteLink');
   if(c.siteUrl){site.style.display='inline';site.href=c.siteUrl;}
+  const prod=document.getElementById('productLink');
+  if(c.productUrl){prod.style.display='inline';prod.href=c.productUrl;prod.textContent=`Open product v${c.productVersion||1} ↗`;}
   const pb=document.getElementById('pauseBtn');
   pb.textContent=c.status==='paused'?'Resume ops':'Pause ops';
   pb.className='ghost mini'+(c.status==='paused'?' warn':'');
@@ -150,8 +175,13 @@ function render(){
   const b=c.brief;
   document.getElementById('brief').innerHTML=b?['product','icp','revenueModel','pricing','rfsFitReason'].filter(k=>b[k]).map(k=>`<div class="k">${k.replace(/([A-Z])/g,' $1').toLowerCase()}</div><div>${esc(b[k])}</div>`).join(''):'<div class="empty">Not drafted yet.</div>';
 
-  seenDev=false;
+  devCount=0;
   document.getElementById('org').innerHTML=orgHtml(c.org,0)||'<div class="empty">CEO is assembling the team.</div>';
+
+  const plog=c.productLog||[];
+  document.getElementById('productLog').innerHTML=plog.length
+    ?plog.map((f,i)=>`<div class="row"><span><b>v${i+1}</b> — ${esc(f)}</span></div>`).reverse().join('')
+    :'<div class="empty">The product engineer hasn\'t shipped yet.</div>';
 
   const v=c.validation;
   document.getElementById('memo').innerHTML=v?`<div class="kv"><div class="k">score</div><div><b>${v.score}</b> / 100 — ${esc(v.verdict)}</div><div class="k">fit</div><div>${esc(v.fitReason||'')}</div><div class="k">strengths</div><div>${(v.strengths||[]).map(esc).join(' · ')}</div><div class="k">risks</div><div>${(v.risks||[]).map(esc).join(' · ')}</div><div class="k">rec</div><div>${esc(v.recommendation||'')}</div></div>`:'<div class="empty">Awaiting analyst.</div>';
@@ -175,8 +205,13 @@ function render(){
 function orgHtml(node,lvl){
   if(!node)return'';
   const canWork=['cmo','coo','cfo','cto'].includes(node.key);
-  const isDev=node.key==='dev'&&!seenDev&&(seenDev=true);
-  let h=`<div class="lvl${lvl}"><div class="row">${node.emoji} <b>${esc(node.title)}</b>${node.name?` <span class="nm">· ${esc(node.name)}</span>`:''}${canWork?` <button class="ghost mini" onclick="requestWork('${node.key}')">Request work</button>`:''}${isDev?` <button class="ghost mini" onclick="requestWork('dev')">Ship site update</button>`:''}</div>${node.charter?`</div><div class="charter lvl${lvl}-c" style="margin-left:${26+lvl*18}px">${esc(node.charter)}`:''}</div>`;
+  let devBtn='';
+  if(node.key==='dev'){
+    devCount++;
+    if(devCount===1)devBtn=` <button class="ghost mini" onclick="requestWork('dev')">Ship site update</button>`;
+    else if(devCount===2)devBtn=` <button class="ghost mini" onclick="requestWork('product')">Ship product update</button>`;
+  }
+  let h=`<div class="lvl${lvl}"><div class="row">${node.emoji} <b>${esc(node.title)}</b>${node.name?` <span class="nm">· ${esc(node.name)}</span>`:''}${canWork?` <button class="ghost mini" onclick="requestWork('${node.key}')">Request work</button>`:''}${devBtn}</div>${node.charter?`</div><div class="charter lvl${lvl}-c" style="margin-left:${26+lvl*18}px">${esc(node.charter)}`:''}</div>`;
   for(const r of node.reports||[])h+=orgHtml(r,lvl+1);
   return h;
 }

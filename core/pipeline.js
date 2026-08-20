@@ -137,6 +137,23 @@ function promptFor(task, company) {
         `<!-- PAGE: features.html -->\n` +
         `No markdown fences, no commentary — just the documents and markers.`;
     }
+    case 'build-product':
+    case 'product-update': {
+      const update = task.type === 'product-update';
+      const shippedList = (company.productLog || []).map((f) => `- ${f}`).join('\n') || '(nothing yet)';
+      return `${ctx}\n\n${update ?
+          `Ship the next iteration of the PRODUCT. Current version: v${company.productVersion || 1}. Features already shipped:\n${shippedList}\n\nKeep everything that exists and add the single most valuable next feature.` :
+          'Build the actual working MVP of the PRODUCT described in the BRIEF.'}\n\n` +
+        `This is the product itself — the logged-in app a customer uses — NOT the marketing site. Requirements:\n` +
+        `- A complete, genuinely usable single-file web application implementing the core value proposition\n` +
+        `- Real interactivity: working forms, create/edit/complete/delete flows, computed stats, filters\n` +
+        `- State persisted to localStorage so the user's data survives reloads; seed realistic demo data on first run\n` +
+        `- Empty states, an onboarding hint, and product-grade UI (Linear/Stripe school: restrained palette, one accent, real hierarchy)\n` +
+        `- Fully responsive, inline CSS/JS only, no external assets\n\n` +
+        `OUTPUT FORMAT: the FIRST line must be a marker comment exactly like:\n` +
+        `<!-- SHIPPED: one-line description of what this build delivers -->\n` +
+        `Then the complete HTML document. No markdown fences, no commentary.`;
+    }
     case 'launch-plan':
       return `${ctx}\n\nWrite the launch plan. Return ONLY JSON with keys: positioning, channels (array of 4), ` +
         `firstWeekTargets (object with signups, demos, payingCustomers), hook (one killer launch line).`;

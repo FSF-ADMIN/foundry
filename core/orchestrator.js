@@ -66,6 +66,20 @@ function countSubs(node) {
   return n;
 }
 
+// All dev agents in hire order. Dev #1 is the lead (site), dev #2 the product
+// engineer (product) — matching how hire-devteam assigns their first tasks.
+function findDevs(node, out = []) {
+  if (!node) return out;
+  if (node.key === 'dev') out.push(node);
+  for (const r of node.reports || []) findDevs(r, out);
+  return out;
+}
+
+function productDevFor(company) {
+  const devs = findDevs(company.org);
+  return devs.find((d) => /product/i.test(d.title)) || devs[1] || devs[0] || null;
+}
+
 function agentFor(company, task) {
   if (task.agentKey === 'analyst') return { id: 'holdco-analyst', ...HOLDCO.analyst, key: 'analyst' };
   if (task.agentId) return findAgent(company.org, task.agentId);
@@ -185,6 +199,7 @@ async function runTask(task, company) {
       taskType: task.type,
       company,
       task,
+      agent,
       maxTokens: isBuild ? config.BUILD_MAX_TOKENS : undefined,
     });
     applyResult(task, company, raw, agent);
@@ -243,7 +258,7 @@ function applyResult(task, company, raw, agent) {
     case 'hire-devteam': {
       const out = llm.parseJson(raw) || { devs: [{ title: 'Lead Frontend Engineer' }, { title: 'Product Engineer' }] };
       const devs = (out.devs || []).slice(0, 2);
-      let lead = null;
+      const hired = [];
       for (const d of devs) {
         const dev = newAgent('dev', d.title || 'Software Developer', {
           name: d.name,
@@ -251,20 +266,30 @@ function applyResult(task, company, raw, agent) {
           hiredBy: agent.id,
         });
         agent.reports.push(dev);
-        if (!lead) lead = dev;
+        hired.push(dev);
       }
       postChat(company, {
         from: 'agent',
         agent,
         kind: 'info',
-        text: `Hired the dev team (${devs.map((d) => `${d.title}${d.name ? ' ' + d.name : ''}`).join(', ')}). ${out.note || 'Shipping the site next.'}`,
+        text: `Hired the dev team (${devs.map((d) => `${d.title}${d.name ? ' ' + d.name : ''}`).join(', ')}). ${out.note || 'Shipping the site and the product next.'}`,
       });
+      // Lead ships the marketing site; the product engineer builds the actual product.
+      const [lead, productDev] = [hired[0], hired[1] || hired[0]];
       if (lead) {
         enqueueTask(company, {
           type: 'build-site',
           agentKey: 'dev',
           agentId: lead.id,
           label: `${lead.title} builds the interactive site`,
+        });
+      }
+      if (productDev) {
+        enqueueTask(company, {
+          type: 'build-product',
+          agentKey: 'dev',
+          agentId: productDev.id,
+          label: `${productDev.title} builds the working product MVP`,
         });
       }
       task.output = out;
@@ -294,6 +319,33 @@ function applyResult(task, company, raw, agent) {
       task.output = { deployed: company.siteUrl, version: company.siteVersion, pages: Object.keys(files), bytes: html.length };
       if (task.type === 'site-update') {
         company.opsLog.unshift({ type: 'site-update', by: agent.title, at: now(), result: { deliverable: `Shipped site v${company.siteVersion}` } });
+        company.opsCount++;
+      }
+      break;
+    }
+    case 'build-product':
+    case 'product-update': {
+      let html = String(raw).trim();
+      const fence = html.match(/```(?:html)?\s*([\s\S]*?)```/);
+      if (fence) html = fence[1].trim();
+      const shipped = (html.match(/<!--\s*SHIPPED:\s*([\s\S]*?)-->/) || [])[1]?.trim() ||
+        (task.type === 'build-product' ? 'Initial product MVP' : 'Product iteration');
+      const dir = path.join(COMPANIES_DIR, company.slug || company.id, 'app');
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(path.join(dir, 'index.html'), html);
+      company.productUrl = `/portfolio/${company.slug || company.id}/app/`;
+      company.productVersion = (company.productVersion || 0) + 1;
+      company.productLog = [...(company.productLog || []), shipped].slice(-12);
+      task.output = { deployed: company.productUrl, version: company.productVersion, shipped, bytes: html.length };
+      if (task.type === 'build-product') {
+        postChat(company, {
+          from: 'agent',
+          agent,
+          kind: 'info',
+          text: `Shipped ${company.name || 'the'} product v1 — a working app, live now at ${company.productUrl}. ${shipped}`,
+        });
+      } else {
+        company.opsLog.unshift({ type: 'product-update', by: agent.title, at: now(), result: { deliverable: `Shipped product v${company.productVersion}: ${shipped}` } });
         company.opsCount++;
       }
       break;
@@ -347,18 +399,17 @@ function opsRotation(company) {
     const exec = findByKey(company.org, slot.agentKey);
     if (exec) rotation.push({ type: slot.type, agentKey: slot.agentKey, agentId: exec.id, label: slot.label });
   }
-  let leadDevUsed = false;
+  let devIndex = 0;
   for (const exec of company.org.reports || []) {
     for (const sub of exec.reports || []) {
-      if (sub.key === 'dev' && !leadDevUsed) {
-        // The lead developer's recurring work is shipping site iterations
-        leadDevUsed = true;
-        rotation.push({
-          type: 'site-update',
-          agentKey: 'dev',
-          agentId: sub.id,
-          label: `${sub.title}: ship site update`,
-        });
+      if (sub.key === 'dev' && devIndex < 2) {
+        // Dev #1 (lead) ships site iterations; dev #2 (product engineer)
+        // ships real product iterations.
+        const isLead = devIndex === 0;
+        devIndex++;
+        rotation.push(isLead
+          ? { type: 'site-update', agentKey: 'dev', agentId: sub.id, label: `${sub.title}: ship site update` }
+          : { type: 'product-update', agentKey: 'dev', agentId: sub.id, label: `${sub.title}: ship product update` });
         continue;
       }
       rotation.push({
@@ -386,6 +437,20 @@ function maybeAdvance(company) {
       const cto = findByKey(company.org, 'cto');
       if (cto) {
         enqueueTask(company, { type: 'hire-devteam', agentKey: 'cto', agentId: cto.id, label: 'CTO hires the dev team' });
+        return;
+      }
+    }
+    // Retrofit: companies from before the product era get their working MVP
+    // built by the product engineer now
+    if (hasDev && !company.productUrl && !tasks.some((t) => t.type === 'build-product')) {
+      const dev = productDevFor(company);
+      if (dev) {
+        enqueueTask(company, {
+          type: 'build-product',
+          agentKey: 'dev',
+          agentId: dev.id,
+          label: `${dev.title} builds the working product MVP`,
+        });
         return;
       }
     }
@@ -419,8 +484,9 @@ function maybeAdvance(company) {
     .filter((t) => pipeline.tasksForStage(company.stage).some((s) => s.type === t.type))
     .every((t) => t.status === 'done');
   if (!stageDone) return;
-  // build stage isn't done until the dev team has actually shipped the site
-  if (company.stage === 'build' && !company.siteUrl) return;
+  // build stage isn't done until the dev team has shipped BOTH the site and
+  // the actual working product
+  if (company.stage === 'build' && (!company.siteUrl || !company.productUrl)) return;
 
   company.stage = pipeline.nextStage(company.stage);
   enqueueStageTasks(company);
@@ -458,7 +524,8 @@ function setPaused(companyId, paused) {
 }
 
 // Human demands work from a specific exec right now (skips the rotation).
-// execKey 'dev' asks the lead developer to ship a site update immediately.
+// execKey 'dev' asks the lead developer to ship a site update immediately;
+// execKey 'product' asks the product engineer to ship a product update.
 function requestWork(companyId, execKey) {
   const company = store.get().companies.find((c) => c.id === companyId);
   if (!company) return null;
@@ -470,6 +537,18 @@ function requestWork(companyId, execKey) {
       agentKey: 'dev',
       agentId: dev.id,
       label: `${dev.title}: ship site update (requested by human)`,
+    });
+    store.save();
+    return company;
+  }
+  if (execKey === 'product') {
+    const dev = productDevFor(company);
+    if (!dev) return null;
+    enqueueTask(company, {
+      type: company.productUrl ? 'product-update' : 'build-product',
+      agentKey: 'dev',
+      agentId: dev.id,
+      label: `${dev.title}: ship product ${company.productUrl ? 'update' : 'MVP'} (requested by human)`,
     });
     store.save();
     return company;

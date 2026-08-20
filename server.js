@@ -4,6 +4,7 @@ const config = require('./config');
 const store = require('./core/store');
 const orch = require('./core/orchestrator');
 const rfs = require('./core/rfs');
+const jupiter = require('./core/jupiter');
 
 store.load();
 
@@ -19,11 +20,12 @@ app.get('/api/state', (req, res) => {
   res.json({
     mode: config.MOCK_MODE ? 'mock' : 'live',
     model: config.MODEL,
+    jupiter: jupiter.getStatus(),
     autopilot: state.autopilot,
     stats: state.stats,
     rfs: rfs.RFS.map((r) => ({ id: r.id, title: r.title, author: r.author, summary: r.summary })),
     companies: state.companies,
-    tasks: state.tasks.slice(0, 40),
+    tasks: state.tasks.slice(0, 120),
     messages: state.messages.slice(0, 60),
   });
 });
@@ -64,6 +66,7 @@ app.get('/api/companies/:id', (req, res) => {
   if (!company) return res.status(404).json({ error: 'Unknown company' });
   res.json({
     mode: config.MOCK_MODE ? 'mock' : 'live',
+    jupiter: jupiter.getStatus(),
     autopilot: state.autopilot,
     rfs: rfs.RFS.map((r) => ({ id: r.id, title: r.title, author: r.author, summary: r.summary })),
     company,

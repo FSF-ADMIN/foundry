@@ -2,3 +2,5 @@ node_modules/
 data/
 companies/
 .DS_Store
+.env
+.claude/
