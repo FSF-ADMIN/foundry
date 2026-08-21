@@ -267,8 +267,8 @@ h2 .aux{margin-left:auto;font-size:12px;letter-spacing:0;text-transform:none;fon
     <section class="view" id="view-dashboard">
       <div class="stats" id="stats"></div>
       <div class="controls">
-        <select id="rfsPick"><option value="">Pick a YC RFS (or let the idea map it)…</option></select>
-        <input id="idea" type="text" placeholder="Optional idea — leave blank to auto-concept from the chosen RFS">
+        <select id="rfsPick"><option value="">Optional: pick a YC RFS…</option></select>
+        <input id="idea" type="text" placeholder="Type any concept — the CEO will interview you about requirements before building">
         <button class="primary" onclick="spawn()">Found company</button>
         <button class="ghost" id="tickBtn" onclick="tickNow()">Run tick</button>
         <button class="ghost" id="apBtn" onclick="toggleAP()">✦ Autopilot: Off</button>
@@ -342,7 +342,7 @@ h2 .aux{margin-left:auto;font-size:12px;letter-spacing:0;text-transform:none;fon
 <div class="toast" id="toast"></div>
 
 <script>
-const STAGES=['ideation','validation','team','build','operate'];
+const STAGES=['discovery','ideation','validation','team','build','operate'];
 let S=null;
 
 /* ---------- icons ---------- */
@@ -525,7 +525,13 @@ function coCard(c){
     :c.status==='paused'?'<span class="stagebtn paused">Paused</span>'
     :`<a class="stagebtn" href="/company/${c.id}"><svg viewBox="0 0 24 24"><path d="m6 4 14 8-14 8z"/></svg>${c.stage}</a>`;
   const rfsO=S.rfs.find(r=>r.id===c.rfsId);
-  const rfsB=rfsO?`<span class="rfs-chip">YC RFS · ${esc(rfsO.title)}</span>`:'';
+  const rfsB=rfsO?`<span class="rfs-chip">YC RFS · ${esc(rfsO.title)}</span>`:c.thesis==='founder'?'<span class="rfs-chip">Founder concept</span>':'';
+  const discovery=c.stage==='discovery'?`<div class="sec"><div class="h" style="color:var(--acc)">Discovery — the CEO has questions</div>
+    <div style="font-size:12.5px;color:var(--dim);line-height:1.5">${c.discovery&&c.discovery.questions?'Answer in the chat panel — your answers become the build requirements.':'The CEO is preparing questions about your concept — run a tick.'}</div>
+    <div style="display:flex;gap:8px;margin-top:10px">
+      <button class="primary mini" onclick="focusChat('${c.id}')">Answer in chat</button>
+      ${c.discovery&&c.discovery.questions?`<button class="ghost mini" onclick="skipDiscovery('${c.id}')">Skip — build from the pitch</button>`:''}
+    </div></div>`:'';
   const score=c.validation?`<span>Analyst score&nbsp; <b>${c.validation.score}</b></span>`:'';
   const pricing=c.brief&&c.brief.pricing?`<span>Pricing&nbsp; <b>${esc(c.brief.pricing)}</b></span>`:'';
   const site=c.siteUrl?`<a href="${c.siteUrl}" target="_blank">Visit live site ↗</a>`:'';
@@ -555,8 +561,18 @@ function coCard(c){
     </div>
     <div class="stages">${bars}</div>
     <div class="meta">${score}${pricing}<a href="/company/${c.id}">Manage business ↗</a>${product}${site}</div>
-    ${org}${ints}${ops}
+    ${discovery}${org}${ints}${ops}
   </div>`;
+}
+function focusChat(coId){
+  document.getElementById('chatCo').value=coId;
+  renderChat();
+  document.getElementById('chatText').focus();
+}
+async function skipDiscovery(coId){
+  await fetch('/api/companies/'+coId+'/skip-discovery',{method:'POST'});
+  toast('Skipped — the CEO is proceeding on the pitch alone.');
+  await tickNow();
 }
 
 /* ======== portfolio view ======== */

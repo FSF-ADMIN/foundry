@@ -10,8 +10,10 @@ module.exports = {
   API_KEY,
   MOCK_MODE: process.env.FOUNDRY_MOCK === '1' || !API_KEY,
   MAX_TOKENS: 4096,
-  // Site builds need much more room — full interactive single-file pages
-  BUILD_MAX_TOKENS: 16000,
+  // Site/product builds need much more room — complete interactive apps and
+  // multi-page sites regularly run past 16k output tokens (dense CSS/JS is
+  // ~2.2 chars/token). Jupiter's external API caps at 32000.
+  BUILD_MAX_TOKENS: 30000,
   // Jupiter — the AI-employee platform that executes/simulates Foundry's tasks.
   // Every mock-mode task is delegated to Jupiter's external API (full audit
   // trail + usage tracking there); if Jupiter is unreachable Foundry falls
@@ -22,7 +24,8 @@ module.exports = {
   // it Jupiter answers 401 and Foundry falls back to its local simulator.
   JUPITER_TOKEN: process.env.FOUNDRY_JUPITER_TOKEN || '',
   JUPITER_ENABLED: process.env.FOUNDRY_JUPITER !== '0',
-  JUPITER_TIMEOUT_MS: 180000,
+  // Big product/site builds stream up to 30k output tokens — allow 10 minutes
+  JUPITER_TIMEOUT_MS: 600000,
   // Autopilot: how often the orchestrator ticks (processes tasks / advances stages)
   TICK_MS: 4000,
   // Max tasks executed per tick across the whole portfolio

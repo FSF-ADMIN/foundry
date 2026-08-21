@@ -15,7 +15,10 @@
 
 const rfs = require('./rfs');
 
-const STAGES = ['ideation', 'validation', 'team', 'build', 'operate'];
+// Companies founded from a free-form concept start at 'discovery' — the CEO
+// interviews the human founder about requirements before anything is built.
+// RFS-thesis companies skip straight to 'ideation'.
+const STAGES = ['discovery', 'ideation', 'validation', 'team', 'build', 'operate'];
 
 const EXEC_HIRES = [
   { execKey: 'cmo', label: 'CEO hires a CMO' },
@@ -38,8 +41,10 @@ const MAX_SUBAGENTS = 4;
 
 function tasksForStage(stage) {
   switch (stage) {
+    case 'discovery':
+      return [{ type: 'discovery-questions', agentKey: 'ceo', label: 'CEO interviews the founder about the concept' }];
     case 'ideation':
-      return [{ type: 'draft-brief', agentKey: 'ceo', label: 'Draft RFS-fitting company brief' }];
+      return [{ type: 'draft-brief', agentKey: 'ceo', label: 'Draft the company brief' }];
     case 'validation':
       return [{ type: 'validate', agentKey: 'analyst', label: 'RFS fit check & investment verdict' }];
     case 'team':
@@ -68,35 +73,61 @@ function orgText(node, depth = 0) {
 
 function context(company) {
   const r = company.rfsId ? rfs.byId(company.rfsId) : null;
-  const notes = (company.humanNotes || []).slice(0, 3)
+  const notes = (company.humanNotes || []).slice(0, 5)
     .map((n) => `- ${n.text}`).join('\n') || '(none yet)';
+  const discovery = company.discovery && company.discovery.questions
+    ? `DISCOVERY QUESTIONS THE CEO ASKED THE FOUNDER:\n${company.discovery.questions.map((q) => `- ${q}`).join('\n')}\n` +
+      `(The founder's answers are in the HUMAN GUIDANCE below — treat them as binding requirements.)\n`
+    : '';
   return (
     `COMPANY: ${company.name || '(unnamed)'}\n` +
+    `THESIS: ${company.thesis === 'founder' ? 'founder-directed (a human pitched this concept — build what they asked for)' : 'YC RFS'}\n` +
     `IDEA: ${company.idea}\n` +
     (r ? `TARGET YC RFS: [${r.id}] ${r.title} — ${r.summary}\n` : '') +
     `BRIEF: ${company.brief ? JSON.stringify(company.brief) : '(none yet)'}\n` +
     `ORG CHART:\n${orgText(company.org)}\n` +
+    discovery +
     `LATEST HUMAN GUIDANCE (from holding-company chat):\n${notes}`
   );
 }
 
 function promptFor(task, company) {
   const ctx = context(company);
+  const founder = company.thesis === 'founder';
   switch (task.type) {
+    case 'discovery-questions':
+      return `${ctx}\n\nA human founder just pitched this concept to Foundry: "${company.idea}"\n\n` +
+        `Before the org designs or builds ANYTHING, interview the founder. Ask the 3-4 highest-leverage questions ` +
+        `whose answers would most change what gets built — think: who exactly is the first user, the ONE core workflow ` +
+        `the MVP must nail, must-have integrations or data sources, pricing/business model, hard constraints or ` +
+        `deal-breakers. Questions must be specific to THIS concept, not generic.\n` +
+        `Return ONLY JSON with keys: questions (array of 3-4 short direct questions), note (1 sentence to the founder ` +
+        `about why you're asking before building).`;
     case 'draft-brief':
       return `${ctx}\n\nCURRENT YC REQUESTS FOR STARTUPS:\n${rfs.catalogText()}\n\n` +
-        `You are founding this company. ${company.idea.startsWith('Auto-concept') ?
+        `You are founding this company. ${founder ?
+          'This is a FOUNDER-DIRECTED company: shape the founder\'s concept into a sharp brief, honoring their ' +
+          'discovery answers in HUMAN GUIDANCE as hard requirements. Map it to a YC RFS ONLY if one genuinely fits ' +
+          '(set rfsId to null otherwise — that is fine for founder-directed companies).' :
+          company.idea.startsWith('Auto-concept') ?
           'Invent a sharp company concept that squarely fits the TARGET YC RFS above.' :
           'Shape the idea into a company that squarely fits ONE of the RFS categories above (pick the best fit).'}\n` +
         `Return ONLY JSON with keys: name (2 words max, brandable), tagline (under 10 words), oneLiner, ` +
-        `product (2-3 sentences), icp, revenueModel, pricing (e.g. "$29/mo"), rfsId (the [id] of the RFS it fits), ` +
-        `rfsFitReason (1 sentence).`;
+        `product (2-3 sentences), icp, revenueModel, pricing (e.g. "$29/mo"), rfsId (the [id] of the RFS it fits, or null), ` +
+        `rfsFitReason (1 sentence, or why it stands on its own).`;
     case 'validate':
-      return `${ctx}\n\nCURRENT YC REQUESTS FOR STARTUPS:\n${rfs.catalogText()}\n\n` +
-        `Foundry ONLY funds companies that clearly fit one of these RFS categories. Judge this brief. ` +
-        `Return ONLY JSON with keys: score (0-100), verdict ("fund" or "pass"), rfsId (best-fit id or null), ` +
-        `fitReason, strengths (array of 3), risks (array of 3), recommendation (1-2 sentences). ` +
-        `Verdict MUST be "pass" if the concept does not clearly fit an RFS, or cannot be operated by AI employees.`;
+      return founder
+        ? `${ctx}\n\nThis is a FOUNDER-DIRECTED company — a human pitched it and answered the CEO's requirement ` +
+          `questions. Do NOT judge it on YC RFS fit. Judge it on: coherence of the concept, whether an AI org can ` +
+          `genuinely build and operate it, and whether the founder's requirements are buildable. ` +
+          `Return ONLY JSON with keys: score (0-100), verdict ("fund" or "pass"), rfsId (a genuinely fitting RFS id or null), ` +
+          `fitReason, strengths (array of 3), risks (array of 3), recommendation (1-2 sentences). ` +
+          `Pass ONLY if the concept is incoherent, unbuildable by AI employees, or the requirements contradict each other.`
+        : `${ctx}\n\nCURRENT YC REQUESTS FOR STARTUPS:\n${rfs.catalogText()}\n\n` +
+          `Foundry ONLY funds RFS-thesis companies that clearly fit one of these RFS categories. Judge this brief. ` +
+          `Return ONLY JSON with keys: score (0-100), verdict ("fund" or "pass"), rfsId (best-fit id or null), ` +
+          `fitReason, strengths (array of 3), risks (array of 3), recommendation (1-2 sentences). ` +
+          `Verdict MUST be "pass" if the concept does not clearly fit an RFS, or cannot be operated by AI employees.`;
     case 'hire-exec': {
       const k = task.meta.execKey.toUpperCase();
       return `${ctx}\n\nYou are hiring your ${k}. Define the role for THIS company specifically. ` +

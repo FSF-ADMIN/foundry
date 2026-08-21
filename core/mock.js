@@ -64,6 +64,20 @@ function respond(taskType, company, task = {}) {
   const meta = task.meta || {};
 
   switch (taskType) {
+    case 'discovery-questions': {
+      const gist = idea.length > 70 ? idea.slice(0, 70).replace(/\s+\S*$/, '') + '…' : idea;
+      const pool = [
+        `Who is the very first user of "${gist}" — and what are they using today instead?`,
+        'What is the ONE core workflow the MVP absolutely must nail on day one?',
+        'Any must-have integrations or data sources (Stripe, Slack, a spreadsheet, an API…)?',
+        'How should this make money — flat subscription, usage-based, or something else?',
+        'Any hard constraints or deal-breakers I should know before the team starts building?',
+      ];
+      return JSON.stringify({
+        note: `Love the concept. Before I put the team on it, a few quick questions so we build exactly what you mean — answer in this chat.`,
+        questions: pool.sort(() => Math.random() - 0.5).slice(0, 3 + Math.floor(Math.random() * 2)),
+      });
+    }
     case 'draft-brief': {
       const target = company.rfsId ? rfs.byId(company.rfsId) : rfs.matchIdea(idea);
       const concept = company.rfsId && idea.startsWith('Auto-concept') && target
@@ -86,6 +100,18 @@ function respond(taskType, company, task = {}) {
 
     case 'validate': {
       const target = (company.brief && company.brief.rfsId) ? rfs.byId(company.brief.rfsId) : null;
+      if (!target && company.thesis === 'founder') {
+        // Founder-directed companies are judged on buildability, not RFS fit
+        return JSON.stringify({
+          score: 70 + Math.floor(Math.random() * 22),
+          verdict: 'fund',
+          rfsId: null,
+          fitReason: 'Founder-directed build — validated against the founder\'s stated requirements, not the RFS thesis.',
+          strengths: ['Founder answered the requirement questions directly', 'Scoped to an AI-operable MVP', 'Clear first user'],
+          risks: ['No RFS tailwind — distribution is on us', 'Requirements may evolve mid-build', 'Founder availability for future questions'],
+          recommendation: 'Fund. Assemble the exec team and build precisely what the founder specified.',
+        });
+      }
       if (!target) {
         return JSON.stringify({
           score: 20 + Math.floor(Math.random() * 15),

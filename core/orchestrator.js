@@ -131,14 +131,19 @@ function spawnCompany({ idea, rfsId }) {
   const state = store.get();
   const r = rfsId ? rfsCatalog.byId(rfsId) : null;
   const finalIdea = (idea || '').trim() || (r ? `Auto-concept from RFS: ${r.title}` : '');
+  // Free-form concepts (no RFS picked) take the founder track: the CEO
+  // interviews the human about requirements before anything gets built.
+  const founderTrack = !r;
   const company = {
     id: newId('co'),
     idea: finalIdea,
     rfsId: r ? r.id : null,
+    thesis: founderTrack ? 'founder' : 'rfs',
+    discovery: null,             // { questions, note, askedAt, answered, skip }
     name: null,
     slug: null,
     status: 'active',            // active | passed
-    stage: 'ideation',
+    stage: founderTrack ? 'discovery' : 'ideation',
     brief: null,
     validation: null,
     launchPlan: null,
@@ -192,7 +197,7 @@ async function runTask(task, company) {
   task.status = 'running';
   store.save();
   try {
-    const isBuild = task.type === 'build-site' || task.type === 'site-update';
+    const isBuild = ['build-site', 'site-update', 'build-product', 'product-update'].includes(task.type);
     const raw = await llm.complete({
       system: systemPromptFor(agent),
       prompt: pipeline.promptFor(task, company),
@@ -215,6 +220,25 @@ async function runTask(task, company) {
 
 function applyResult(task, company, raw, agent) {
   switch (task.type) {
+    case 'discovery-questions': {
+      const out = llm.parseJson(raw) || {
+        questions: [
+          'Who exactly is the first user, and what do they use today instead?',
+          'What is the ONE core workflow the MVP must nail on day one?',
+          'How should it make money — subscription, usage, or something else?',
+        ],
+      };
+      const questions = (out.questions || []).slice(0, 4).map((q) => String(q));
+      company.discovery = { questions, note: out.note || null, askedAt: now(), answered: false, skip: false };
+      if (out.note) {
+        postChat(company, { from: 'agent', agent, kind: 'info', text: String(out.note) });
+      }
+      for (const q of questions) {
+        postChat(company, { from: 'agent', agent, kind: 'question', text: q });
+      }
+      task.output = out;
+      break;
+    }
     case 'draft-brief': {
       const brief = llm.parseJson(raw) || { name: 'Unnamed Venture', tagline: company.idea, rfsId: company.rfsId };
       company.brief = brief;
@@ -234,7 +258,9 @@ function applyResult(task, company, raw, agent) {
           from: 'agent',
           agent: { title: 'Investment Analyst', emoji: '📊' },
           kind: 'info',
-          text: `Passed on ${company.name || 'this concept'}: ${v.fitReason || 'off-thesis'}. Foundry only funds current YC RFS fits.`,
+          text: company.thesis === 'founder'
+            ? `Passed on ${company.name || 'this concept'}: ${v.fitReason || 'not buildable as specified'}. Refine the concept or requirements and pitch again.`
+            : `Passed on ${company.name || 'this concept'}: ${v.fitReason || 'off-thesis'}. Foundry only funds current YC RFS fits — or pitch it as a free-form concept instead.`,
         });
       }
       break;
@@ -300,6 +326,10 @@ function applyResult(task, company, raw, agent) {
       let html = String(raw).trim();
       const fence = html.match(/```(?:html)?\s*([\s\S]*?)```/);
       if (fence) html = fence[1].trim();
+      // A truncated or empty build must never overwrite a working deployment
+      if (html.length < 500 || !/<\/html>/i.test(html)) {
+        throw new Error(`Site build output empty or truncated (${html.length} bytes) — kept the previous version`);
+      }
       // Multi-page convention: first document is index.html; every further
       // page is preceded by a `<!-- PAGE: name.html -->` marker line
       const parts = html.split(/<!--\s*PAGE:\s*([\w.-]+)\s*-->/);
@@ -328,6 +358,10 @@ function applyResult(task, company, raw, agent) {
       let html = String(raw).trim();
       const fence = html.match(/```(?:html)?\s*([\s\S]*?)```/);
       if (fence) html = fence[1].trim();
+      // A truncated or empty build must never overwrite a working deployment
+      if (html.length < 500 || !/<\/html>/i.test(html)) {
+        throw new Error(`Product build output empty or truncated (${html.length} bytes) — kept the previous version`);
+      }
       const shipped = (html.match(/<!--\s*SHIPPED:\s*([\s\S]*?)-->/) || [])[1]?.trim() ||
         (task.type === 'build-product' ? 'Initial product MVP' : 'Product iteration');
       const dir = path.join(COMPANIES_DIR, company.slug || company.id, 'app');
@@ -484,6 +518,12 @@ function maybeAdvance(company) {
     .filter((t) => pipeline.tasksForStage(company.stage).some((s) => s.type === t.type))
     .every((t) => t.status === 'done');
   if (!stageDone) return;
+  // discovery holds until the founder answers the CEO's questions in chat
+  // (or explicitly skips them)
+  if (company.stage === 'discovery') {
+    const d = company.discovery || {};
+    if (!d.answered && !d.skip) return;
+  }
   // build stage isn't done until the dev team has shipped BOTH the site and
   // the actual working product
   if (company.stage === 'build' && (!company.siteUrl || !company.productUrl)) return;
@@ -500,6 +540,9 @@ function userMessage(companyId, text) {
   postChat(company, { from: 'user', kind: 'user', text });
   company.humanNotes.unshift({ text, at: now() });
   company.humanNotes = company.humanNotes.slice(0, 10);
+  // A reply during discovery is the founder answering the CEO's requirement
+  // questions — unblocks the pipeline on the next tick.
+  if (company.stage === 'discovery' && company.discovery) company.discovery.answered = true;
   const history = state.messages
     .filter((m) => m.companyId === company.id).slice(0, 6).reverse()
     .map((m) => `${m.from === 'user' ? 'Human' : m.agentTitle}: ${m.text}`).join('\n');
@@ -566,6 +609,21 @@ function requestWork(companyId, execKey) {
   return company;
 }
 
+// Founder chose to skip the CEO's discovery questions — proceed on the pitch alone.
+function skipDiscovery(companyId) {
+  const company = store.get().companies.find((c) => c.id === companyId);
+  if (!company || company.stage !== 'discovery') return null;
+  company.discovery = { ...(company.discovery || { questions: [] }), skip: true };
+  postChat(company, {
+    from: 'agent',
+    agent: findAgent(company.org, company.org.id),
+    kind: 'info',
+    text: 'Understood — proceeding on the pitch alone. You can steer us in chat any time.',
+  });
+  store.save();
+  return company;
+}
+
 function setIntegrationStatus(companyId, name, status) {
   const company = store.get().companies.find((c) => c.id === companyId);
   if (!company) return null;
@@ -600,4 +658,4 @@ async function tick() {
   }
 }
 
-module.exports = { spawnCompany, tick, userMessage, setIntegrationStatus, setPaused, requestWork, COMPANIES_DIR };
+module.exports = { spawnCompany, tick, userMessage, setIntegrationStatus, setPaused, requestWork, skipDiscovery, COMPANIES_DIR };

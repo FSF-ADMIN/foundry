@@ -75,6 +75,13 @@ app.get('/api/companies/:id', (req, res) => {
   });
 });
 
+// Founder skips the CEO's discovery questions — build proceeds on the pitch alone
+app.post('/api/companies/:id/skip-discovery', (req, res) => {
+  const company = orch.skipDiscovery(req.params.id);
+  if (!company) return res.status(404).json({ error: 'Unknown company or not in discovery' });
+  res.json({ ok: true });
+});
+
 app.post('/api/companies/:id/pause', (req, res) => {
   const company = orch.setPaused(req.params.id, !!(req.body && req.body.paused));
   if (!company) return res.status(404).json({ error: 'Unknown company (or passed)' });
